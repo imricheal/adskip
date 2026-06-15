@@ -1,0 +1,58 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyqt5 pyinstaller
+
+      - name: Build macOS app
+        run: |
+          pyinstaller \
+            --windowed \
+            --name "广告助手" \
+            --osx-bundle-identifier "com.adskip.adhelper" \
+            --add-data "ad.jpg:." \
+            ad_skip.py
+
+      - name: Package as zip
+        run: |
+          cd dist
+          zip -r "广告助手-macos.zip" "广告助手.app"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 广告助手-macos
+          path: dist/广告助手-macos.zip
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: 广告助手-macos
+          path: dist/
+
+      - name: Create release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/广告助手-macos.zip
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
