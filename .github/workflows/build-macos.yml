@@ -41,18 +41,3 @@ jobs:
         with:
           name: 广告助手-macos
           path: dist/广告助手-macos.zip
-
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: 广告助手-macos
-          path: dist/
-
-      - name: Create release
-        if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/广告助手-macos.zip
-          draft: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
