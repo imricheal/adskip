@@ -1,11 +1,12 @@
 import sys
+import base64
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QProgressBar, QSpinBox,
-    QComboBox, QGraphicsDropShadowEffect, QFrame
+    QComboBox, QGraphicsDropShadowEffect, QFrame, QDialog
 )
 from PyQt5.QtCore import QTimer, Qt, QRectF
-from PyQt5.QtGui import QFont, QPalette, QColor, QPainter, QPen, QBrush, QLinearGradient
+from PyQt5.QtGui import QFont, QPalette, QColor, QPainter, QPen, QBrush, QLinearGradient, QImage, QPixmap
 
 
 class GradientProgressBar(QProgressBar):
@@ -46,6 +47,228 @@ class GradientProgressBar(QProgressBar):
             painter.drawRoundedRect(progress_rect, radius, radius)
 
 
+class AdWindow(QDialog):
+    """广告窗口"""
+
+    def __init__(self, platform, duration, parent=None):
+        super().__init__(parent)
+        self.platform = platform
+        self.ad_duration = duration
+        self.ad_elapsed = 0
+        self.is_playing = True
+        self.init_ui()
+
+    def load_ad_image(self):
+        """加载本地广告图片"""
+        import os
+        # 使用当前脚本所在目录
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        ad_path = os.path.join(base_dir, "ad.jpg")
+        if os.path.exists(ad_path):
+            pixmap = QPixmap(ad_path)
+            self.ad_label.setPixmap(pixmap.scaled(
+                680, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            ))
+        else:
+            self.ad_label.setText("广告图片未找到")
+            self.ad_label.setStyleSheet("color: #666666; font-size: 16px;")
+
+    def init_ui(self):
+        # 深色背景
+        p = QPalette()
+        p.setColor(QPalette.Window, QColor(10, 10, 15))
+        p.setColor(QPalette.WindowText, QColor(255, 255, 255))
+        self.setPalette(p)
+
+        self.setWindowTitle(f"{self.platform} - 广告")
+        self.setFixedSize(680, 520)
+        self.set_center()
+
+        # 主布局
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        self.setLayout(main_layout)
+
+        # 视频播放区域（黑色背景 + 广告图片）
+        self.video_area = QWidget()
+        self.video_area.setFixedHeight(400)
+        self.video_area.setStyleSheet("background-color: #000000;")
+        video_layout = QVBoxLayout()
+        video_layout.setContentsMargins(0, 0, 0, 0)
+        video_layout.setAlignment(Qt.AlignCenter)
+        self.video_area.setLayout(video_layout)
+
+        # 广告图片标签
+        self.ad_label = QLabel()
+        self.ad_label.setAlignment(Qt.AlignCenter)
+        self.ad_label.setFixedSize(680, 400)
+        # 加载本地广告图片
+        self.load_ad_image()
+        video_layout.addWidget(self.ad_label)
+
+        # 广告标记
+        ad_badge = QLabel("广告")
+        ad_badge.setFont(QFont("Microsoft YaHei", 11, QFont.Bold))
+        ad_badge.setStyleSheet("""
+            background-color: rgba(255,68,68,0.9);
+            color: #FFFFFF;
+            padding: 5px 14px;
+            border-radius: 4px;
+        """)
+        video_layout.addWidget(ad_badge, 0, Qt.AlignLeft | Qt.AlignTop)
+        ad_badge.move(15, 15)
+
+        main_layout.addWidget(self.video_area)
+
+        # 控制栏
+        control_bar = QWidget()
+        control_bar.setFixedHeight(80)
+        control_bar.setStyleSheet("background-color: #1a1a1a;")
+        control_layout = QVBoxLayout()
+        control_layout.setContentsMargins(15, 10, 15, 10)
+        control_layout.setSpacing(8)
+        control_bar.setLayout(control_layout)
+
+        # 进度条区域
+        progress_row = QHBoxLayout()
+        progress_row.setSpacing(10)
+
+        self.ad_time_label = QLabel("0:00")
+        self.ad_time_label.setFont(QFont("Arial", 11))
+        self.ad_time_label.setStyleSheet("color: #AAAAAA;")
+        self.ad_time_label.setFixedWidth(45)
+
+        self.ad_progress_bar = QProgressBar()
+        self.ad_progress_bar.setFixedHeight(6)
+        self.ad_progress_bar.setRange(0, 1000)
+        self.ad_progress_bar.setValue(0)
+        self.ad_progress_bar.setTextVisible(False)
+        self.ad_progress_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #333333;
+                border-radius: 3px;
+            }
+            QProgressBar::chunk {
+                background-color: #FF4444;
+                border-radius: 3px;
+            }
+        """)
+
+        self.ad_total_label = QLabel(f"-{self._format_time(self.ad_duration)}")
+        self.ad_total_label.setFont(QFont("Arial", 11))
+        self.ad_total_label.setStyleSheet("color: #AAAAAA;")
+        self.ad_total_label.setFixedWidth(45)
+
+        progress_row.addWidget(self.ad_time_label)
+        progress_row.addWidget(self.ad_progress_bar)
+        progress_row.addWidget(self.ad_total_label)
+        control_layout.addLayout(progress_row)
+
+        # 按钮区域
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(15)
+
+        # 跳过按钮
+        self.btn_skip = QPushButton(f"跳过广告 ({int(self.ad_duration)}s)")
+        self.btn_skip.setFixedHeight(38)
+        self.btn_skip.setFont(QFont("Microsoft YaHei", 12))
+        self.btn_skip.setCursor(Qt.PointingHandCursor)
+        self.btn_skip.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 68, 68, 0.8);
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                padding: 0 20px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 68, 68, 1);
+            }
+        """)
+        self.btn_skip.clicked.connect(self.close)
+
+        btn_row.addWidget(self.btn_skip)
+        btn_row.addStretch()
+
+        # 关闭按钮
+        btn_close = QPushButton("关闭")
+        btn_close.setFixedSize(80, 38)
+        btn_close.setFont(QFont("Microsoft YaHei", 12))
+        btn_close.setCursor(Qt.PointingHandCursor)
+        btn_close.setStyleSheet("""
+            QPushButton {
+                background-color: #333333;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #444444;
+            }
+        """)
+        btn_close.clicked.connect(self.close)
+        btn_row.addWidget(btn_close)
+
+        control_layout.addLayout(btn_row)
+
+        main_layout.addWidget(control_bar)
+
+        # 广告计时器
+        self.ad_timer = QTimer()
+        self.ad_timer.timeout.connect(self.update_ad)
+
+        # 开始广告
+        self.start_ad()
+
+    def _format_time(self, seconds):
+        """格式化时间"""
+        mins = int(seconds) // 60
+        secs = int(seconds) % 60
+        return f"{mins}:{secs:02d}"
+
+    def start_ad(self):
+        """开始广告"""
+        self.ad_timer.start(100)
+
+    def update_ad(self):
+        """更新广告进度"""
+        if not self.is_playing:
+            return
+
+        self.ad_elapsed += 0.1
+        remaining = max(0, self.ad_duration - self.ad_elapsed)
+
+        # 更新进度条
+        progress = int((self.ad_elapsed / self.ad_duration) * 1000)
+        self.ad_progress_bar.setValue(min(progress, 1000))
+
+        # 更新时间
+        self.ad_time_label.setText(self._format_time(self.ad_elapsed))
+        self.ad_total_label.setText(f"-{self._format_time(remaining)}")
+
+        # 更新跳过按钮
+        if remaining > 0:
+            self.btn_skip.setText(f"跳过广告 ({int(remaining)}s)")
+        else:
+            self.btn_skip.setText("关闭广告")
+
+        # 广告结束
+        if self.ad_elapsed >= self.ad_duration:
+            self.ad_timer.stop()
+            self.btn_skip.setText("关闭广告")
+
+    def set_center(self):
+        screen = QApplication.primaryScreen()
+        sg = screen.geometry()
+        wg = self.geometry()
+        self.move((sg.width() - wg.width()) // 2, (sg.height() - wg.height()) // 2)
+
+    def closeEvent(self, event):
+        self.ad_timer.stop()
+        super().closeEvent(event)
+
+
 class AdSkipWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -53,6 +276,7 @@ class AdSkipWindow(QWidget):
         self.duration = 15
         self.timer_interval = 80
         self.elapsed_ms = 0
+        self.ad_window = None
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_progress)
@@ -68,7 +292,7 @@ class AdSkipWindow(QWidget):
         self.setPalette(p)
 
         self.setWindowTitle("广告跳过助手")
-        self.setFixedSize(750, 950)
+        self.setFixedSize(750, 1150)
         self.set_center()
 
         # 主布局
@@ -279,10 +503,10 @@ class AdSkipWindow(QWidget):
 
         # ========== 进度显示区 ==========
         self.progress_widget = QWidget()
-        self.progress_widget.setFixedHeight(280)
+        self.progress_widget.setFixedHeight(420)
         progress_layout = QVBoxLayout()
         progress_layout.setContentsMargins(0, 0, 0, 0)
-        progress_layout.setSpacing(25)
+        progress_layout.setSpacing(15)
         progress_layout.setAlignment(Qt.AlignCenter)
         self.progress_widget.setLayout(progress_layout)
 
@@ -304,6 +528,28 @@ class AdSkipWindow(QWidget):
         self.time_text.setAlignment(Qt.AlignCenter)
         self.time_text.setStyleSheet("color: #8899AA;")
         progress_layout.addWidget(self.time_text)
+
+        progress_layout.addStretch()  # 弹性空间，把按钮挤到底部
+
+        # 查看广告按钮 - 底部居中
+        self.btn_view_ad = QPushButton("👁 查看广告跳过解析")
+        self.btn_view_ad.setFixedSize(380, 65)
+        self.btn_view_ad.setFont(QFont("Microsoft YaHei", 14, QFont.Bold))
+        self.btn_view_ad.setCursor(Qt.PointingHandCursor)
+        self.btn_view_ad.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 100, 100, 0.15);
+                color: #FF8888;
+                border: 1px solid rgba(255, 100, 100, 0.3);
+                border-radius: 25px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 100, 100, 0.25);
+                border-color: rgba(255, 100, 100, 0.5);
+            }
+        """)
+        self.btn_view_ad.clicked.connect(self.open_ad_window)
+        progress_layout.addWidget(self.btn_view_ad, alignment=Qt.AlignCenter)
 
         main_layout.addWidget(self.progress_widget)
 
@@ -346,6 +592,12 @@ class AdSkipWindow(QWidget):
         sg = screen.geometry()
         wg = self.geometry()
         self.move((sg.width() - wg.width()) // 2, (sg.height() - wg.height()) // 2)
+
+    def open_ad_window(self):
+        """打开广告窗口"""
+        if self.ad_window is None or not self.ad_window.isVisible():
+            self.ad_window = AdWindow(self.current_platform, self.duration, self)
+            self.ad_window.show()
 
     def show_input_state(self):
         """输入状态"""
